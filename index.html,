@@ -1,0 +1,910 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#101c25">
+<title>NexusBlatter 3D - Anime Battle Royale</title>
+
+<style>
+*{box-sizing:border-box}
+html,body{
+ margin:0;width:100%;height:100%;
+ overflow:hidden;background:#101c25;
+ font-family:Arial;color:white;touch-action:none
+}
+canvas{
+ position:fixed;inset:0;width:100%;height:100%;
+ display:block;z-index:0
+}
+#hud{
+ position:absolute;z-index:2;top:12px;left:12px;
+ right:12px;pointer-events:none;
+ text-shadow:1px 2px 4px #000
+}
+#info{font-size:15px;font-weight:bold}
+#vidaFundo{
+ height:14px;width:180px;background:#333;
+ border:2px solid white;border-radius:10px;
+ margin-top:7px;overflow:hidden
+}
+#vida{
+ height:100%;width:100%;
+ background:linear-gradient(90deg,#16c84a,#70ff65);
+ transition:width .2s
+}
+#ajuda{font-size:12px;margin-top:7px}
+#controles{
+ position:absolute;z-index:3;bottom:18px;
+ left:15px;right:15px;
+ display:flex;justify-content:space-between;
+ align-items:end;pointer-events:none
+}
+#direcoes{
+ display:grid;
+ grid-template-columns:48px 48px 48px;
+ grid-template-rows:48px 48px 48px;gap:4px
+}
+.control{
+ pointer-events:auto;
+ border:1px solid #ffffff99;
+ background:#122b42dd;color:white;
+ border-radius:12px;font-size:23px;
+ touch-action:none;user-select:none;
+ -webkit-user-select:none;
+}
+.control:active{background:#1685c8}
+#cima{grid-column:2}
+#esquerda{grid-column:1;grid-row:2}
+#baixo{grid-column:2;grid-row:2}
+#direita{grid-column:3;grid-row:2}
+#atacar{
+ width:88px;height:88px;border-radius:50%;
+ background:linear-gradient(140deg,#e52bff,#6b18bd);
+ font-size:15px;font-weight:bold;border:3px solid white
+}
+#tela,#fim{
+ position:absolute;z-index:10;inset:0;
+ background:linear-gradient(145deg,#07111df5,#101e35f5);
+ display:flex;flex-direction:column;
+ justify-content:center;align-items:center;
+ text-align:center;padding:25px
+}
+#fim{display:none}
+h1{
+ color:#55dcff;text-shadow:0 0 15px #008cff;
+ font-size:32px
+}
+#iniciar,#reiniciar{
+ background:linear-gradient(90deg,#087dce,#9b32df);
+ color:white;border:0;padding:16px 28px;
+ border-radius:12px;font-size:18px;
+ font-weight:bold;margin-top:15px
+}
+#aviso{
+ position:absolute;z-index:5;top:30%;
+ left:0;right:0;text-align:center;
+ font-weight:bold;font-size:20px;
+ color:#ffe66b;pointer-events:none;
+ text-shadow:1px 2px 4px black
+}
+#fim p{font-size:17px}
+</style>
+</head>
+
+<body>
+
+<div id="hud">
+ <div id="info">Pontos: 0 | Inimigos: 8</div>
+ <div id="vidaFundo"><div id="vida"></div></div>
+ <div id="ajuda">Explore o mapa e vença os desafios!</div>
+</div>
+
+<div id="aviso"></div>
+
+<div id="controles">
+ <div id="direcoes">
+  <button class="control" id="cima">▲</button>
+  <button class="control" id="esquerda">◀</button>
+  <button class="control" id="baixo">▼</button>
+  <button class="control" id="direita">▶</button>
+ </div>
+ <button class="control" id="atacar">ENERGIA</button>
+</div>
+
+<div id="tela">
+ <h1>NexusBlatter 3D</h1>
+ <h2>ANIME BATTLE ROYALE</h2>
+ <p>Um novo desafio espera por você!</p>
+ <p>Explore o mapa, enfrente os adversários e conquiste a vitória.</p>
+ <button id="iniciar">ENTRAR NO JOGO</button>
+</div>
+
+<div id="fim">
+ <h1 id="resultado">VOCÊ VENCEU!</h1>
+ <p id="mensagemFinal">Todos os desafios foram concluídos!</p>
+ <button id="reiniciar">JOGAR NOVAMENTE</button>
+</div>
+
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+// =========================
+// CENA E CÂMERA
+// =========================
+
+const cena=new THREE.Scene();
+cena.background=new THREE.Color(0x8bc9e8);
+cena.fog=new THREE.Fog(0x8bc9e8,45,115);
+
+const camera=new THREE.PerspectiveCamera(
+ 65,innerWidth/innerHeight,.1,180
+);
+
+const renderer=new THREE.WebGLRenderer({
+ antialias:true,alpha:false
+});
+
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+
+renderer.domElement.style.position='fixed';
+renderer.domElement.style.inset='0';
+renderer.domElement.style.zIndex='0';
+document.body.appendChild(renderer.domElement);
+
+// =========================
+// ILUMINAÇÃO
+// =========================
+
+cena.add(new THREE.HemisphereLight(
+ 0xffffff,0x536c42,2
+));
+
+const sol=new THREE.DirectionalLight(0xffffff,2.2);
+sol.position.set(-25,40,25);
+sol.castShadow=true;
+sol.shadow.mapSize.set(1024,1024);
+sol.shadow.camera.left=-65;
+sol.shadow.camera.right=65;
+sol.shadow.camera.top=65;
+sol.shadow.camera.bottom=-65;
+cena.add(sol);
+
+// =========================
+// MATERIAIS
+// =========================
+
+const material=(cor,extra={})=>
+ new THREE.MeshStandardMaterial({
+  color:cor,roughness:.85,...extra
+ });
+
+function bloco(w,h,d,cor,x,y,z){
+ const m=new THREE.Mesh(
+  new THREE.BoxGeometry(w,h,d),
+  material(cor)
+ );
+ m.position.set(x,y,z);
+ m.castShadow=true;
+ m.receiveShadow=true;
+ cena.add(m);
+ return m;
+}
+
+// =========================
+// MAPA GRANDE
+// =========================
+
+const chao=new THREE.Mesh(
+ new THREE.PlaneGeometry(120,120),
+ material(0x438b42)
+);
+chao.rotation.x=-Math.PI/2;
+chao.receiveShadow=true;
+cena.add(chao);
+
+const grade=new THREE.GridHelper(
+ 120,60,0x8dbd69,0x6da353
+);
+grade.position.y=.025;
+cena.add(grade);
+
+// Caminhos do mapa
+const caminho=new THREE.Mesh(
+ new THREE.PlaneGeometry(9,110),
+ material(0xb6a17b)
+);
+caminho.rotation.x=-Math.PI/2;
+caminho.position.y=.035;
+cena.add(caminho);
+
+const caminho2=caminho.clone();
+caminho2.rotation.z=Math.PI/2;
+cena.add(caminho2);
+
+// Árvores
+function criarArvore(x,z){
+ const tronco=new THREE.Mesh(
+  new THREE.CylinderGeometry(.25,.38,2,8),
+  material(0x79502c)
+ );
+ tronco.position.set(x,1,z);
+ tronco.castShadow=true;
+ cena.add(tronco);
+
+ const copa=new THREE.Mesh(
+  new THREE.ConeGeometry(1.7,4,8),
+  material(0x176b36)
+ );
+ copa.position.set(x,3.5,z);
+ copa.castShadow=true;
+ cena.add(copa);
+}
+
+for(let i=0;i<150;i++){
+ const x=(Math.random()-.5)*108;
+ const z=(Math.random()-.5)*108;
+
+ if(Math.abs(x)>10||Math.abs(z)>10){
+  criarArvore(x,z);
+ }
+}
+
+// Casas
+function criarCasa(x,z,cor){
+ bloco(7,4,6,cor,x,2,z);
+
+ const teto=new THREE.Mesh(
+  new THREE.ConeGeometry(5.4,3.5,4),
+  material(0x843d32)
+ );
+ teto.rotation.y=Math.PI/4;
+ teto.position.set(x,5.5,z);
+ teto.castShadow=true;
+ cena.add(teto);
+
+ bloco(1.3,2.4,.15,0x533323,x,1.2,z-3.08);
+
+ bloco(1.2,1,.12,0x75dafa,x-2,2,z-3.1);
+ bloco(1.2,1,.12,0x75dafa,x+2,2,z-3.1);
+}
+
+criarCasa(-22,-22,0xd4a36b);
+criarCasa(23,-23,0xd6b477);
+criarCasa(-27,24,0xc68d60);
+criarCasa(27,25,0xc5a36a);
+criarCasa(0,38,0xd9b68a);
+
+// Rochas
+for(let i=0;i<35;i++){
+ const pedra=new THREE.Mesh(
+  new THREE.DodecahedronGeometry(
+   .5+Math.random()*.8,0
+  ),
+  material(0x777d78)
+ );
+ pedra.position.set(
+  (Math.random()-.5)*100,
+  .5,
+  (Math.random()-.5)*100
+ );
+ pedra.castShadow=true;
+ cena.add(pedra);
+}
+
+// =========================
+// PERSONAGEM
+// =========================
+
+function parte(g,w,h,d,c,x,y,z){
+ const m=new THREE.Mesh(
+  new THREE.BoxGeometry(w,h,d),
+  material(c)
+ );
+ m.position.set(x,y,z);
+ m.castShadow=true;
+ g.add(m);
+ return m;
+}
+
+function personagem(cor){
+ const g=new THREE.Group();
+
+ const corpo=new THREE.Mesh(
+  new THREE.CylinderGeometry(.48,.62,1.25,12),
+  material(cor)
+ );
+ corpo.position.y=1.35;
+ corpo.castShadow=true;
+ g.add(corpo);
+
+ const cabeca=new THREE.Mesh(
+  new THREE.SphereGeometry(.43,16,12),
+  material(0xffc99d)
+ );
+ cabeca.position.y=2.3;
+ cabeca.castShadow=true;
+ g.add(cabeca);
+
+ const cabelo=new THREE.Mesh(
+  new THREE.SphereGeometry(.46,12,8),
+  material(0x20202c)
+ );
+ cabelo.position.set(0,2.55,-.04);
+ g.add(cabelo);
+
+ // Ombros
+ parte(g,.32,.35,.35,0x202c55,-.55,1.7,0);
+ parte(g,.32,.35,.35,0x202c55,.55,1.7,0);
+
+ const perna1=parte(g,.24,.8,.28,0x202c55,-.27,.4,0);
+ const perna2=parte(g,.24,.8,.28,0x202c55,.27,.4,0);
+
+ g.userData.pernas=[perna1,perna2];
+
+ return g;
+}
+
+const jogador=personagem(0x167cdb);
+cena.add(jogador);
+
+// =========================
+// VARIÁVEIS DO JOGO
+// =========================
+
+let inimigos=[];
+let projeteis=[];
+let pontos=0;
+let vida=100;
+let jogando=false;
+let tempo=0;
+let ultimoAtaque=0;
+let movimento={
+ cima:false,baixo:false,
+ esquerda:false,direita:false
+};
+
+const VELOCIDADE=9;
+const LIMITE=55;
+
+// =========================
+// INIMIGOS INTELIGENTES
+// =========================
+
+function criarInimigos(){
+ inimigos.forEach(e=>cena.remove(e.obj));
+ inimigos=[];
+
+ for(let i=0;i<8;i++){
+  const obj=personagem(
+   [0xd82c4d,0x9b35ce,0xe58b26,0x283b8c][i%4]
+  );
+
+  const a=Math.random()*Math.PI*2;
+  const distancia=22+Math.random()*13;
+
+  obj.position.set(
+   Math.cos(a)*distancia,0,
+   Math.sin(a)*distancia
+  );
+
+  cena.add(obj);
+
+  inimigos.push({
+   obj,
+   vida:3,
+   vivo:true,
+   velocidade:1.5+Math.random()*.7,
+   espera:0,
+   fase:Math.random()*10
+  });
+ }
+}
+
+// =========================
+// HUD
+// =========================
+
+function atualizarHUD(){
+ document.getElementById('info').textContent=
+ `Pontos: ${pontos} | Inimigos: ${
+  inimigos.filter(e=>e.vivo).length
+ }`;
+
+ document.getElementById('vida').style.width=
+ Math.max(0,vida)+'%';
+}
+
+let avisoTempo=0;
+
+function aviso(txt){
+ const a=document.getElementById('aviso');
+ a.textContent=txt;
+ avisoTempo=1.3;
+}
+
+// =========================
+// FINAL DO JOGO
+// =========================
+
+function finalizar(vitoria){
+ if(!jogando)return;
+
+ jogando=false;
+ movimento={
+  cima:false,baixo:false,
+  esquerda:false,direita:false
+ };
+
+ document.getElementById('fim').style.display='flex';
+
+ document.getElementById('resultado').textContent=
+ vitoria?'VOCÊ VENCEU!':'FIM DE JOGO';
+
+ document.getElementById('mensagemFinal').textContent=
+ vitoria
+ ?'Parabéns! Você derrotou todos os adversários!'
+ :'Sua aventura terminou. Tente novamente!';
+}
+
+// =========================
+// SISTEMA DE COMBATE
+// =========================
+
+function atingirInimigo(e){
+ if(!e.vivo||!jogando)return;
+
+ e.vida--;
+
+ if(e.vida<=0){
+  e.vivo=false;
+  e.obj.visible=false;
+  pontos+=100;
+  aviso('ADVERSÁRIO DERROTADO! +100');
+ }else{
+  pontos+=10;
+  aviso('ACERTOU! +10');
+ }
+
+ atualizarHUD();
+
+ if(inimigos.every(x=>!x.vivo)){
+  finalizar(true);
+ }
+}
+
+function atacar(){
+ if(!jogando)return;
+
+ if(tempo-ultimoAtaque<.45)return;
+ ultimoAtaque=tempo;
+
+ const vivos=inimigos.filter(e=>e.vivo);
+
+ if(!vivos.length)return;
+
+ const alvo=vivos.sort((a,b)=>
+  jogador.position.distanceTo(a.obj.position)-
+  jogador.position.distanceTo(b.obj.position)
+ )[0];
+
+ const distancia=jogador.position.distanceTo(
+  alvo.obj.position
+ );
+
+ if(distancia>22){
+  aviso('CHEGUE MAIS PERTO!');
+  return;
+ }
+
+ const orb=new THREE.Mesh(
+  new THREE.SphereGeometry(.3,16,12),
+  new THREE.MeshStandardMaterial({
+   color:0x47eaff,
+   emissive:0x009dff,
+   emissiveIntensity:2
+  })
+ );
+
+ orb.position.copy(jogador.position);
+ orb.position.y=1.7;
+ cena.add(orb);
+
+ projeteis.push({
+  obj:orb,
+  alvo,
+  velocidade:25
+ });
+}
+
+// =========================
+// INICIAR / REINICIAR
+// =========================
+
+function iniciar(){
+ pontos=0;
+ vida=100;
+ tempo=0;
+ ultimoAtaque=-10;
+
+ projeteis.forEach(p=>cena.remove(p.obj));
+ projeteis=[];
+
+ criarInimigos();
+
+ jogador.position.set(0,0,0);
+ jogador.rotation.set(0,0,0);
+
+ for(const n of Object.keys(movimento)){
+  movimento[n]=false;
+ }
+
+ document.getElementById('aviso').textContent='';
+ document.getElementById('fim').style.display='none';
+ document.getElementById('tela').style.display='none';
+
+ atualizarHUD();
+
+ camera.position.set(0,6,-10);
+ camera.lookAt(0,2,0);
+
+ jogando=true;
+}
+
+document.getElementById('iniciar').onclick=iniciar;
+document.getElementById('reiniciar').onclick=iniciar;
+
+// =========================
+// CONTROLES DE CELULAR
+// =========================
+
+for(const nome of Object.keys(movimento)){
+ const b=document.getElementById(nome);
+
+ b.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  movimento[nome]=true;
+  try{b.setPointerCapture(e.pointerId)}catch(err){}
+ });
+
+ const soltar=()=>{
+  movimento[nome]=false;
+ };
+
+ b.addEventListener('pointerup',soltar);
+ b.addEventListener('pointercancel',soltar);
+ b.addEventListener('lostpointercapture',soltar);
+}
+
+document.getElementById('atacar').addEventListener(
+ 'pointerdown',e=>{
+  e.preventDefault();
+  atacar();
+ }
+);
+
+// Teclado
+const teclas={
+ ArrowUp:'cima',
+ ArrowDown:'baixo',
+ ArrowLeft:'esquerda',
+ ArrowRight:'direita',
+ w:'cima',s:'baixo',
+ a:'esquerda',d:'direita'
+};
+
+addEventListener('keydown',e=>{
+ if(teclas[e.key]){
+  movimento[teclas[e.key]]=true;
+ }
+ if(e.code==='Space')atacar();
+});
+
+addEventListener('keyup',e=>{
+ if(teclas[e.key]){
+  movimento[teclas[e.key]]=false;
+ }
+});
+
+// =========================
+// ATUALIZAÇÃO DO JOGO
+// =========================
+
+const relogio=new THREE.Clock();
+const direcao=new THREE.Vector3();
+
+function atualizar(dt){
+ if(!jogando)return;
+
+ tempo+=dt;
+
+ // Movimento suave
+ direcao.set(
+  (movimento.direita?1:0)-
+  (movimento.esquerda?1:0),
+  0,
+  (movimento.baixo?1:0)-
+  (movimento.cima?1:0)
+ );
+
+ if(direcao.length()>0){
+  direcao.normalize();
+
+  jogador.position.addScaledVector(
+   direcao,VELOCIDADE*dt
+  );
+
+  jogador.rotation.y=Math.atan2(
+   direcao.x,direcao.z
+  );
+
+  jogador.userData.pernas[0].rotation.x=
+   Math.sin(tempo*12)*.5;
+
+  jogador.userData.pernas[1].rotation.x=
+   -Math.sin(tempo*12)*.5;
+ }else{
+  jogador.userData.pernas[0].rotation.x=0;
+  jogador.userData.pernas[1].rotation.x=0;
+ }
+
+ jogador.position.x=THREE.MathUtils.clamp(
+  jogador.position.x,-LIMITE,LIMITE
+ );
+
+ jogador.position.z=THREE.MathUtils.clamp(
+  jogador.position.z,-LIMITE,LIMITE
+ );
+
+ // Inteligência dos inimigos
+ for(const e of inimigos){
+  if(!e.vivo)continue;
+
+  const d=jogador.position.distanceTo(
+   e.obj.position
+  );
+
+  e.fase+=dt*5;
+  e.obj.position.y=.04+Math.abs(
+   Math.sin(e.fase)*.05
+  );
+
+  if(d>1.7){
+   const v=new THREE.Vector3().subVectors(
+    jogador.position,e.obj.position
+   ).normalize();
+
+   e.obj.position.addScaledVector(
+    v,e.velocidade*dt
+   );
+
+   e.obj.rotation.y=Math.atan2(v.x,v.z);
+
+   e.espera=0;
+  }else{
+   e.espera+=dt;
+
+   if(e.espera>=1.8){
+    vida=Math.max(0,vida-4);
+    e.espera=0;
+    atualizarHUD();
+
+    if(vida<=0){
+     finalizar(false);
+     return;
+    }
+   }
+  }
+ }
+
+ // Projéteis de energia
+ for(let i=projeteis.length-1;i>=0;i--){
+  const p=projeteis[i];
+
+  if(!p.alvo.vivo){
+   cena.remove(p.obj);
+   projeteis.splice(i,1);
+   continue;
+  }
+
+  const destino=p.alvo.obj.position.clone();
+  destino.y+=1.5;
+
+  const v=destino.sub(p.obj.position);
+  const distancia=v.length();
+
+  if(distancia<.65){
+   atingirInimigo(p.alvo);
+   cena.remove(p.obj);
+   projeteis.splice(i,1);
+  }else{
+   p.obj.position.addScaledVector(
+    v.normalize(),p.velocidade*dt
+   );
+  }
+ }
+
+ // Câmera em terceira pessoa
+ const atras=new THREE.Vector3(0,5.5,-10);
+
+ atras.applyAxisAngle(
+  new THREE.Vector3(0,1,0),
+  jogador.rotation.y
+ );
+
+ const cameraPos=jogador.position.clone().add(atras);
+
+ camera.position.lerp(
+  cameraPos,Math.min(1,dt*5)
+ );
+
+ const alvoCamera=jogador.position.clone();
+ alvoCamera.y+=2.2;
+
+ camera.lookAt(alvoCamera);
+
+ // Avisos
+ if(avisoTempo>0){
+  avisoTempo-=dt;
+  if(avisoTempo<=0){
+   document.getElementById('aviso').textContent='';
+  }
+ }
+}
+
+// =========================
+// ANIMAÇÃO
+// =========================
+
+function animar(){
+ requestAnimationFrame(animar);
+
+ const dt=Math.min(relogio.getDelta(),.04);
+
+ atualizar(dt);
+
+ renderer.render(cena,camera);
+}
+
+animar();
+
+// =========================
+// REDIMENSIONAR TELA
+// =========================
+
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
+era>1.4){
+    vida=Math.max(0,vida-5);
+    e.espera=0;
+    atualizarHUD();
+    if(vida<=0)finalizar(false);
+   }
+  }
+ }
+
+ for(let i=projeteis.length-1;i>=0;i--){
+  const p=projeteis[i];
+  if(!p.alvo.vivo){
+   cena.remove(p.obj);projeteis.splice(i,1);continue;
+  }
+  const destino=p.alvo.obj.position.clone();
+  destino.y+=1.5;
+  const v=destino.sub(p.obj.position);
+  const distancia=v.length();
+  if(distancia<.7||p.tempo>1.2){
+   atingirInimigo(p.alvo);
+   cena.remove(p.obj);
+   projeteis.splice(i,1);
+  }else{
+   p.obj.position.addScaledVector(v.normalize(),22*dt);
+   p.tempo+=dt;
+  }
+ }
+
+ const alvoCamera=jogador.position.clone();
+ alvoCamera.y+=2.5;
+ const atras=new THREE.Vector3(0,5,-9);
+ atras.applyAxisAngle(new THREE.Vector3(0,1,0),jogador.rotation.y);
+ const cameraPos=jogador.position.clone().add(atras);
+ camera.position.lerp(cameraPos,Math.min(1,dt*5));
+ camera.lookAt(alvoCamera);
+}
+
+function animar(){
+ requestAnimationFrame(animar);
+ const dt=Math.min(relogio.getDelta(),.04);
+ atualizar(dt);
+ renderer.render(cena,camera);
+}
+animar();
+
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
+<html lang="pt-BR">
+<head><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#101c25">
+<title>NexusBlatter 3D - Anime Battle Royale</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101c25;font-family:Arial;color:white;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;top:12px;left:12px;right:12px;pointer-events:none;text-shadow:1px 2px 3px #000}
+#info{font-size:15px;font-weight:bold}
+#vidaFundo{height:13px;width:170px;background:#333;border:2px solid white;border-radius:10px;margin-top:7px;overflow:hidden}
+#vida{height:100%;width:100%;background:#2bea54}
+#ajuda{font-size:12px;margin-top:7px}
+#controles{position:absolute;bottom:18px;left:15px;right:15px;display:flex;justify-content:space-between;align-items:end}
+#direcoes{display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px 48px;gap:4px}
+.control{border:1px solid #ffffff88;background:#122b42bb;color:white;border-radius:12px;font-size:23px;touch-action:none}
+#cima{grid-column:2}#esquerda{grid-column:1;grid-row:2}
+#baixo{grid-column:2;grid-row:2}#direita{grid-column:3;grid-row:2}
+#atacar{width:85px;height:85px;border-radius:50%;background:#a52bde;font-size:15px;font-weight:bold;border:3px solid white}
+#tela,#fim{position:absolute;inset:0;background:#07111deF;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:25px;z-index:5}
+#fim{display:none}
+h1{color:#55dcff;text-shadow:0 0 15px #008cff;font-size:32px}
+button{cursor:pointer}
+#iniciar,#reiniciar{background:linear-gradient(90deg,#087dce,#9b32df);color:white;border:0;padding:16px 28px;border-radius:12px;font-size:18px;font-weight:bold;margin-top:15px}
+#aviso{position:absolute;top:30%;left:0;right:0;text-align:center;font-weight:bold;font-size:20px;color:#ffe66b;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div id="hud">
+ <div id="info">Pontos: 0 | Inimigos: 5</div>
+ <div id="vidaFundo"><div id="vida"></div></div>
+ <div id="ajuda">Explore o mapa e vença os desafios!</div>
+</div>
+
+<div id="aviso"></div>
+
+<div id="controles">
+ <div id="direcoes">
+  <button class="control" id="cima">▲</button>
+  <button class="control" id="esquerda">◀</button>
+  <button class="control" id="baixo">▼</button>
+  <button class="control" id="direita">▶</button>
+ </div>
+ <button class="control" id="atacar">ENERGIA</button>
+</div>
+
+<div id="tela">
+ <h1>NexusBlatter 3D</h1>
+ <p>Anime Battle Royale</p>
+ <p>Explore o mapa, enfrente desafios e conquiste a vitória!</p>
+ <button id="iniciar">ENTRAR NO JOGO</button>
+</div>
+
+<div id="fim">
+ <h1 id="resultado">VOCÊ VENCEU!</h1>
+ <p id="mensagemFinal">Parabéns!</p>
+ <button id="reiniciar">JOGAR NOVAMENTE</button>
+</div>
+
+<script type="module">
+import
